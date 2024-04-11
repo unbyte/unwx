@@ -1,0 +1,27 @@
+[package]
+name = "unwx"
+version = "0.1.0"
+edition = "2021"
+readme = "README.md"
+description = "unpack wxapkg easily."
+homepage = "https://github.com/unbyte/unwx"
+repository = "https://github.com/unbyte/unwx"
+keywords = ["wxapkg"]
+categories = ["command-line-utilities"]
+license = "MIT"
+authors = ["unbyte <i@shangyes.net>"]
+
+[[bin]]
+name = "unwx"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+flume = { version = "0.11.0", default-features = false }
+xflags = "0.3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = "debuginfo"
+panic = "abort"

@@ -1,0 +1,63 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ${{ matrix.targets.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        targets:
+          - os: ubuntu-latest
+            ext: ''
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            ext: ''
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            ext: ''
+            target: aarch64-apple-darwin
+          - os: windows-latest
+            ext: '.exe'
+            target: x86_64-pc-windows-msvc
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.targets.target }}
+      - run: cargo build --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.targets.target }}
+          path: target/release/unwx${{ matrix.targets.ext }}
+          if-no-files-found: error
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - run: |
+          cd artifacts
+          for DIR in */ ; do
+              DIR_NAME=${DIR%/}
+              tar -czvf "${DIR_NAME}.tgz" -C "$DIR_NAME" .
+              echo "Packaged $DIR_NAME into ${DIR_NAME}.tgz"
+          done
+          cd -
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.tgz
