@@ -14,14 +14,12 @@ authors = ["unbyte <i@shangyes.net>"]
 [[bin]]
 name = "unwx"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-flume = { version = "0.11.0", default-features = false }
 xflags = "0.3"
+rayon = "1.8"
 
 [profile.release]
 codegen-units = 1
 lto = true
-strip = "debuginfo"
+strip = true
 panic = "abort"

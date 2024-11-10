@@ -2,56 +2,45 @@ use std::io::{self, Cursor, Read};
 use std::str::from_utf8_unchecked;
 
 #[derive(Debug)]
+pub struct DecodedFile<'a> {
+    pub name: &'a str,
+    pub data: &'a [u8],
+}
+
+#[derive(Debug)]
 pub struct Decoder<'a> {
     reader: Cursor<&'a Vec<u8>>,
-    sender: flume::Sender<(&'a str, &'a [u8])>,
+    remaining_files: u32,
 }
 
 impl<'a> Decoder<'a> {
-    pub fn new(buf: &'a Vec<u8>, sender: flume::Sender<(&'a str, &'a [u8])>) -> Self {
-        Self {
+    pub fn new(buf: &'a Vec<u8>) -> io::Result<Self> {
+        let mut decoder = Self {
             reader: Cursor::new(buf),
-            sender,
-        }
-    }
+            remaining_files: 0,
+        };
 
-    pub fn start(mut self) -> io::Result<()> {
-        let first_mark = self.read_u8()?;
-        if first_mark != 0xBE {
+        if decoder.read_u8()? != 0xBE {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "Invalid first mark",
             ));
         }
 
-        let _file_info_offset = self.read_u32()?;
-        let _index_info_length = self.read_u32()?;
-        let _body_info_length = self.read_u32()?;
+        decoder.read_u32()?; // file_info_offset
+        decoder.read_u32()?; // index_info_length
+        decoder.read_u32()?; // body_info_length
 
-        let last_mark = self.read_u8()?;
-        if last_mark != 0xED {
+        if decoder.read_u8()? != 0xED {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "Invalid last mark",
             ));
         }
 
-        let file_count = self.read_u32()?;
+        decoder.remaining_files = decoder.read_u32()?;
 
-        for _ in 0..file_count {
-            let name_len = self.read_u32()? as usize;
-            let name = self.read_string(name_len)?;
-            let offset = self.read_u32()? as usize;
-            let size = self.read_u32()? as usize;
-
-            let data = self.get_data(offset, size)?;
-
-            self.sender
-                .send((name, data))
-                .expect("Failed to send data to worker thread");
-        }
-
-        Ok(())
+        Ok(decoder)
     }
 
     fn read_u8(&mut self) -> io::Result<u8> {
@@ -87,5 +76,27 @@ impl<'a> Decoder<'a> {
             ));
         }
         Ok(&buf[offset..end])
+    }
+}
+
+impl<'a> Iterator for Decoder<'a> {
+    type Item = io::Result<DecodedFile<'a>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining_files == 0 {
+            return None;
+        }
+
+        self.remaining_files -= 1;
+
+        Some((|| {
+            let name_len = self.read_u32()? as usize;
+            let name = self.read_string(name_len)?;
+            let offset = self.read_u32()? as usize;
+            let size = self.read_u32()? as usize;
+            let data = self.get_data(offset, size)?;
+
+            Ok(DecodedFile { name, data })
+        })())
     }
 }

@@ -4,30 +4,21 @@ use std::path::PathBuf;
 use std::{fs, io};
 
 #[derive(Debug)]
-pub struct Sinker<'a> {
+pub struct Sinker {
     target_dir: PathBuf,
-    recv: flume::Receiver<(&'a str, &'a [u8])>,
 }
 
-impl<'a> Sinker<'a> {
-    pub fn new<P: Into<PathBuf>>(target: P, recv: flume::Receiver<(&'a str, &'a [u8])>) -> Self {
+impl Sinker {
+    pub fn new<P: Into<PathBuf>>(target: P) -> Self {
         Self {
             target_dir: target.into(),
-            recv,
         }
     }
 
-    pub fn start(self) {
-        while let Ok((filename, data)) = self.recv.recv() {
-            if let Err(e) = self.write_file(filename, data) {
-                eprintln!("warning: write failed {}: {:?}", filename, e);
-            }
-        }
-    }
-
-    fn write_file(&self, filename: &str, data: &[u8]) -> io::Result<()> {
-        let mut path = self.target_dir.clone();
-        path.push(filename.strip_prefix('/').unwrap_or(filename));
+    pub fn write_file(&self, filename: &str, data: &[u8]) -> io::Result<()> {
+        let path = self
+            .target_dir
+            .join(filename.strip_prefix('/').unwrap_or(filename));
 
         let mut file = match File::create(&path) {
             Ok(file) => file,

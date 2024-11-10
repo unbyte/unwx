@@ -1,7 +1,7 @@
 use crate::decoder::Decoder;
 use crate::sinker::Sinker;
 use std::time::Instant;
-use std::{fs, io, thread};
+use std::{fs, io};
 
 mod decoder;
 mod sinker;
@@ -27,18 +27,35 @@ fn main() -> io::Result<()> {
     let output = cmd.output.unwrap_or(format!("{input}.unpacked"));
 
     if cmd.clean {
-        fs::remove_dir_all(&output).expect("error when clean output dir");
+        match fs::remove_dir_all(&output) {
+            Ok(_) => (),
+            Err(e) if e.kind() != io::ErrorKind::NotFound => {
+                panic!("failed to clean output directory: {:?}", e);
+            }
+            _ => (),
+        }
     }
 
     let timer = Instant::now();
+
     let data = fs::read(&input).expect("error when read input package");
-    thread::scope(|scope| {
-        let (sender, recv) = flume::unbounded();
-        scope.spawn(move || Sinker::new(output, recv).start());
-        Decoder::new(&data, sender)
-            .start()
-            .expect("error when decode input package");
+
+    let decoder = Decoder::new(&data).expect("error when initializing decoder");
+    let sinker = Sinker::new(output);
+
+    rayon::scope(|scope| {
+        let sinker = &sinker;
+        for file in decoder {
+            let file = file.expect("error when decoding file");
+
+            scope.spawn(move |_| {
+                if let Err(e) = sinker.write_file(file.name, file.data) {
+                    eprintln!("warning: write failed {}: {:?}", file.name, e);
+                }
+            });
+        }
     });
+
     eprintln!("done in {:?}", timer.elapsed());
     Ok(())
 }
