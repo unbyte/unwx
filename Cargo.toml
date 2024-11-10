@@ -17,6 +17,13 @@ name = "unwx"
 [dependencies]
 xflags = "0.3"
 rayon = "1.8"
+anyhow = "1.0"
+
+[target.'cfg(windows)'.dependencies]
+pbkdf2 = "0.12"
+sha1 = "0.10"
+aes = "0.8"
+cbc = "0.1"
 
 [profile.release]
 codegen-units = 1

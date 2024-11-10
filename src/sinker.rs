@@ -15,6 +15,14 @@ impl Sinker {
         }
     }
 
+    pub fn clean(&self) -> io::Result<()> {
+        match fs::remove_dir_all(&self.target_dir) {
+            Ok(_) => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e),
+        }
+    }
+
     pub fn write_file(&self, filename: &str, data: &[u8]) -> io::Result<()> {
         let path = self
             .target_dir
